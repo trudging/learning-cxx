@@ -10,6 +10,10 @@ struct Tensor4D {
     Tensor4D(unsigned int const shape_[4], T const *data_) {
         unsigned int size = 1;
         // TODO: 填入正确的 shape 并计算 size
+        for (int i = 0; i < 4; ++i) {
+            shape[i] = shape_[i];
+            size *= shape[i];
+        }
         data = new T[size];
         std::memcpy(data, data_, size * sizeof(T));
     }
@@ -28,6 +32,48 @@ struct Tensor4D {
     // 则 `this` 与 `others` 相加时，3 个形状为 `[1, 2, 1, 4]` 的子张量各自与 `others` 对应项相加。
     Tensor4D &operator+=(Tensor4D const &others) {
         // TODO: 实现单向广播的加法
+        // 计算总元素数量（size）用于循环
+        unsigned int size = 1;
+        for (int i = 0; i < 4; ++i) {
+            size *= shape[i];
+        }
+
+        for (unsigned int i = 0; i < size; ++i) {
+            // 计算当前一维索引 i 对应的 4维坐标 (n, c, h, w)
+            // 假设 shape 是 [d0, d1, d2, d3] (batch, channel, height, width)
+            unsigned int current_idx = i;
+            unsigned int idx[4]; // 存储分解后的 4D 坐标
+            
+            // 使用除法和取模进行坐标转换（Stride 计算的逆过程）
+            // 注意：通常 Tensor 存储是行优先（Row Major），即最后一个维度变化最快
+            // 这里我们手动展开计算，或者利用 stride
+            
+            // 为了简化，我们边计算坐标边计算 others 的各种 broadcast 索引
+            // 但最通用的方法是先算出坐标
+            unsigned int temp = i;
+            for (int obj = 3; obj >= 0; --obj) {
+                idx[obj] = temp % shape[obj];
+                temp /= shape[obj];
+            }
+
+            // 计算 others 的线性索引
+            // 广播规则：如果 others.shape[dim] == 1，则该维度的坐标始终取 0
+            // 否则，取和 this 一样的坐标 idx[dim]
+            unsigned int others_linear_index = 0;
+            unsigned int others_stride = 1;
+            
+            for (int k = 3; k >= 0; --k) {
+                // 如果 others 在该维度是 1，则坐标始终是 0，对线性索引的贡献是 0 * stride
+                // 如果 others 在该维度不是 1，则必须和 this 一样（题目假设），坐标是 idx[k]
+                if (others.shape[k] != 1) {
+                    others_linear_index += idx[k] * others_stride;
+                }
+                others_stride *= others.shape[k];
+            }
+
+            data[i] += others.data[others_linear_index];
+        }
+
         return *this;
     }
 };
